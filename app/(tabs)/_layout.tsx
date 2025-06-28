@@ -23,8 +23,8 @@ export default function _layout() {
         },
         tabBarStyle: {
           backgroundColor: 'black',
-          borderBottomWidth: 1,
-          borderBottomColor: 'rgb(31, 41, 55)', // gray-800
+          // borderBottomWidth: 1,
+          // borderBottomColor: 'rgb(31, 41, 55)', // gray-800
           paddingTop: insets.top + 10,
           paddingBottom: 10
         },

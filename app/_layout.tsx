@@ -7,5 +7,17 @@ export default function RootLayout() {
       name="(tabs)"
       options={{headerShown: false}}
     />
+    <Stack.Screen
+      name="categories/notes"
+      options={{headerShown: false,}}
+    />
+    <Stack.Screen
+      name="categories/reminder"
+      options={{headerShown: false}}
+    />
+    <Stack.Screen
+      name="categories/todolist"
+      options={{headerShown: false}}
+    />
   </Stack>;
 }

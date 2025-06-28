@@ -46,10 +46,42 @@ const createTables = async (): Promise<void> => {
       );
     `);
 
+    await db.execAsync(`
+      CREATE TABLE IF NOT EXISTS messages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        message TEXT NOT NULL,
+        type TEXT NOT NULL CHECK (type IN ('sender', 'answer')),
+        timestamp TEXT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
     console.log('Tables created successfully');
   } catch (error) {
     console.error('Error creating tables:', error);
     throw error;
+  }
+};
+
+export const messageOperations = {
+  insert: async (message: Omit<any, 'id'>) => {
+    const result = await db.runAsync(
+      'INSERT INTO messages (message, type, timestamp) VALUES (?, ?, ?)',
+      [message.message, message.type, message.timestamp]
+    );
+    return result.lastInsertRowId;
+  },
+
+  getAll: async () => {
+    return await db.getAllAsync('SELECT * FROM messages ORDER BY created_at ASC');
+  },
+
+  delete: async (id: number) => {
+    return await db.runAsync('DELETE FROM messages WHERE id = ?', [id]);
+  },
+
+  deleteAll: async () => {
+    return await db.runAsync('DELETE FROM messages');
   }
 };
 
