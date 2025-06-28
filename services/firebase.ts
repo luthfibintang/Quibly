@@ -4,6 +4,7 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDocs,
   getFirestore,
   onSnapshot,
   orderBy,
@@ -52,19 +53,21 @@ export const QuiblyDB = {
     },
 
   // Listen untuk perubahan pesan
-  listenToMessages: (callback: (messages: FirebaseChatMessage[]) => void) => {
-        // Mengurutkan berdasarkan 'timestamp'
-        const q = query(collection(db, 'messages'), orderBy('timestamp', 'asc'));
-        return onSnapshot(q, (querySnapshot) => {
-            const messages: FirebaseChatMessage[] = [];
-            querySnapshot.forEach((doc) => {
-                // Casting ke tipe data baru FirebaseChatMessage
-                messages.push({ id: doc.id, ...doc.data() } as FirebaseChatMessage);
-            });
-            callback(messages);
-        });
-    },
-
+  getMessages: async () => {
+    try {
+      const messagesRef = collection(db, 'messages');
+      const q = query(messagesRef, orderBy('timestamp', 'asc')); // Urutkan berdasarkan waktu
+      const querySnapshot = await getDocs(q);
+      
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+    } catch (error) {
+      console.error('Error getting messages:', error);
+      throw error;
+    }
+  },
   // === NOTES FUNCTIONS ===
   
   // Tambah catatan baru
