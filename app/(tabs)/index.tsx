@@ -288,10 +288,10 @@ export default function Index() {
           // Convert Firebase messages to ChatMessage format
           const chatMessages: ChatMessage[] = messageHistory.map((msg: FirebaseMessage, index: number) => {
             // Handle timestamp conversion
-            let timestampString = new Date().toLocaleTimeString('en-US', { 
+            let timestampString = new Date().toLocaleTimeString('id-ID', { 
               hour: 'numeric', 
               minute: '2-digit',
-              hour12: true 
+              hour12: false
             });
 
             if (msg.timestamp) {
@@ -312,10 +312,10 @@ export default function Index() {
                 }
 
                 if (!isNaN(date.getTime())) {
-                  timestampString = date.toLocaleTimeString('en-US', { 
+                  timestampString = date.toLocaleTimeString('id-ID', { 
                     hour: 'numeric', 
                     minute: '2-digit',
-                    hour12: true 
+                    hour12: false
                   });
                 }
               } catch (error) {
@@ -419,10 +419,10 @@ export default function Index() {
       id: Date.now().toString(),
       message: userMessage,
       type: 'sender',
-      timestamp: new Date().toLocaleTimeString('en-US', { 
+      timestamp: new Date().toLocaleTimeString('id-ID', { 
         hour: 'numeric', 
         minute: '2-digit',
-        hour12: true 
+        hour12: false
       }),
     };
 
@@ -460,10 +460,10 @@ export default function Index() {
         id: (Date.now() + 1).toString(),
         message: systemResponse,
         type: 'answer',
-        timestamp: new Date().toLocaleTimeString('en-US', { 
+        timestamp: new Date().toLocaleTimeString('id-ID', { 
           hour: 'numeric', 
           minute: '2-digit',
-          hour12: true 
+          hour12: false
         }),
       };
 
@@ -477,10 +477,10 @@ export default function Index() {
         id: (Date.now() + 1).toString(),
         message: 'Maaf, terjadi kesalahan. Silakan coba lagi.',
         type: 'answer',
-        timestamp: new Date().toLocaleTimeString('en-US', { 
+        timestamp: new Date().toLocaleTimeString('id-ID', { 
           hour: 'numeric', 
           minute: '2-digit',
-          hour12: true 
+          hour12: false
         }),
       };
       setMessages(prev => [...prev, errorMessage]);

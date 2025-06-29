@@ -26,6 +26,7 @@ export default function FilterButtons({
     } else {
       return [
         { key: 'all', label: 'All' },
+        {key: 'due-date', label: 'Has Due Date'}
       ];
     }
   };

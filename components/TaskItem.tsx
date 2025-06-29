@@ -6,6 +6,7 @@ export interface TaskItemProps {
   content: string;
   parsedTime?: string;
   isCompleted: boolean;
+  dueDate?: string;
   onToggleComplete: (id: string) => void;
 }
 
@@ -14,6 +15,7 @@ export default function TaskItem({
   content, 
   parsedTime, 
   isCompleted, 
+  dueDate,
   onToggleComplete 
 }: TaskItemProps) {
 
@@ -87,6 +89,15 @@ export default function TaskItem({
             }`}
           >
             {formatReminder(parsedTime)}
+          </Text>
+        )}
+        {dueDate && (
+          <Text 
+            className={`text-sm mt-1 ${
+              isCompleted ? 'text-gray-600' : 'text-gray-400'
+            }`}
+          >
+            Deadline: {formatReminder(dueDate)}
           </Text>
         )}
       </View>

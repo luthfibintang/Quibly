@@ -1,18 +1,18 @@
 import FilterButtons from '@/components/FilterButtons';
 import TaskItem from '@/components/TaskItem';
 import { icons } from '@/constants/icons';
+import { QuiblyDB } from '@/services/firebase'; // Import Firebase database functions
 import { useRouter } from 'expo-router';
-import React, { useMemo, useState } from 'react';
-import { Image, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, Image, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface ReminderItem {
   id: string;
   content: string;
-  category: string;
   created_at: string;
-  parsed_time: string;
   is_completed: boolean;
+  parsed_time: string;
 }
 
 // Fungsi untuk menentukan label section berdasarkan waktu
@@ -43,82 +43,63 @@ export default function Reminder() {
   const insets = useSafeAreaInsets();
   const [activeFilter, setActiveFilter] = useState('today');
   const [showFinished, setShowFinished] = useState(false);
+  const [reminders, setReminders] = useState<ReminderItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const [reminders, setReminders] = useState<ReminderItem[]>([
-    {
-      id: '1',
-      content: 'Water the plants',
-      category: 'reminder',
-      created_at: '2025-06-28T19:00:00+07:00',
-      parsed_time: '2025-06-28T08:00:00+07:00',
-      is_completed: true,
-    },
-    {
-      id: '2',
-      content: 'Study',
-      category: 'reminder',
-      created_at: '2025-06-28T19:00:00+07:00',
-      parsed_time: '2025-06-28T10:00:00+07:00',
-      is_completed: true,
-    },
-    {
-      id: '3',
-      content: 'Study',
-      category: 'reminder',
-      created_at: '2025-06-28T19:00:00+07:00',
-      parsed_time: '2025-06-28T13:00:00+07:00',
-      is_completed: false,
-    },
-    {
-      id: '4',
-      content: 'Get ready for a sleep',
-      category: 'reminder',
-      created_at: '2025-06-28T19:00:00+07:00',
-      parsed_time: '2025-06-28T22:00:00+07:00',
-      is_completed: false,
-    },
-    {
-      id: '5',
-      content: 'Morning jog',
-      category: 'reminder',
-      created_at: '2025-06-28T19:00:00+07:00',
-      parsed_time: '2025-06-29T06:00:00+07:00',
-      is_completed: false,
-    },
-    {
-      id: '6',
-      content: 'Team meeting',
-      category: 'reminder',
-      created_at: '2025-06-28T19:00:00+07:00',
-      parsed_time: '2025-06-30T14:00:00+07:00',
-      is_completed: false,
-    },
-    {
-      id: '7',
-      content: 'Client Presentation',
-      category: 'reminder',
-      created_at: '2025-06-26T20:00:00+07:00',
-      parsed_time: '2025-06-27T14:00:00+07:00',
-      is_completed: false,
-    },
-    {
-      id: '8',
-      content: 'Project Deadline',
-      category: 'reminder',
-      created_at: '2025-06-01T10:00:00+07:00',
-      parsed_time: '2025-06-26T14:00:00+07:00',
-      is_completed: false,
-    },
-  ]);
+  // Listen to reminders from Firebase on component mount
+  useEffect(() => {
+    setLoading(true);
+    setError(null);
 
-  const handleToggleComplete = (id: string) => {
-    setReminders(prev =>
-      prev.map(reminder =>
-        reminder.id === id
-          ? { ...reminder, is_completed: !reminder.is_completed }
-          : reminder
-      )
-    );
+    const unsubscribe = QuiblyDB.listenToReminders((firebaseReminders: FirebaseReminder[]) => {
+      try {
+        // Transform Firebase data to match our interface
+        const transformedReminders: ReminderItem[] = firebaseReminders.map(reminder => ({
+          id: reminder.id,
+          content: reminder.content,
+          created_at: reminder.created_at?.toDate?.()?.toISOString() || new Date().toISOString(),
+          is_completed: reminder.is_completed,
+          parsed_time: reminder.parsed_time?.toDate?.()?.toISOString() || new Date().toISOString()
+        }));
+        
+        setReminders(transformedReminders);
+        setLoading(false);
+      } catch (err) {
+        console.error('Error processing reminders:', err);
+        setError('Failed to process reminders');
+        setLoading(false);
+      }
+    });
+
+    // Cleanup subscription on unmount
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
+  }, []);
+
+  const loadReminders = () => {
+    setError(null);
+  };
+
+  const handleToggleComplete = async (id: string) => {
+    try {
+      // Find the current reminder to get its current status
+      const currentReminder = reminders.find(r => r.id === id);
+      if (!currentReminder) return;
+
+      const newCompletedStatus = !currentReminder.is_completed;
+
+      // Update in Firebase - the real-time listener will update the UI
+      await QuiblyDB.updateReminderStatus(id, newCompletedStatus);
+      
+      // console.log(`Reminder ${id} status updated to: ${newCompletedStatus}`);
+    } catch (error) {
+      console.error('Error updating reminder status:', error);
+      setError('Failed to update reminder status');
+    }
   };
 
   const filteredReminders = useMemo(() => {
@@ -164,6 +145,39 @@ export default function Reminder() {
 
   const router = useRouter();
 
+  // Show loading state
+  if (loading) {
+    return (
+      <View className="flex-1 bg-black">
+        {/* Header */}
+        <View
+          className="flex-row items-center justify-between px-6 py-4 border-b border-gray-800"
+          style={{ paddingTop: insets.top + 16 }}
+        >
+          <TouchableOpacity onPress={() => router.back()}>
+            <Image
+              source={icons.left}
+              className="w-8 h-8"
+              style={{ tintColor: '#ffffff' }}
+            />
+          </TouchableOpacity>
+
+          <Text className="text-white text-xl font-semibold">
+            Reminder
+          </Text>
+
+          <View className="w-6" />
+        </View>
+
+        {/* Loading State */}
+        <View className="flex-1 items-center justify-center">
+          <ActivityIndicator size="large" color="#8B5CF6" />
+          <Text className="text-gray-500 text-base mt-4">Loading reminders...</Text>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View className="flex-1 bg-black">
       {/* Header */}
@@ -183,14 +197,29 @@ export default function Reminder() {
           Reminder
         </Text>
 
-        <View className="w-6" />
+        <TouchableOpacity onPress={loadReminders}>
+          <Text className="text-mainPurple text-sm">Refresh</Text>
+        </TouchableOpacity>
       </View>
+
+      {/* Error State */}
+      {error && (
+        <View className="px-6 py-2 bg-red-900/20">
+          <Text className="text-red-400 text-sm">{error}</Text>
+        </View>
+      )}
 
       {/* Content */}
       <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
         {pendingReminders.length === 0 && completedReminders.length === 0 ? (
           <View className="flex-1 items-center justify-center py-20">
             <Text className="text-gray-500 text-base">No reminders found</Text>
+            <TouchableOpacity 
+              onPress={loadReminders}
+              className="mt-4 px-4 py-2 bg-mainPurple rounded-lg"
+            >
+              <Text className="text-white text-sm">Reload</Text>
+            </TouchableOpacity>
           </View>
         ) : (
           <>
