@@ -68,6 +68,26 @@ export const QuiblyDB = {
       throw error;
     }
   },
+  listenToMessages: (callback: (messages: FirebaseChatMessage[]) => void) => {
+    return onSnapshot(
+      query(collection(db, 'messages'), orderBy('timestamp', 'asc')),
+      (snapshot) => {
+        const messages: FirebaseChatMessage[] = [];
+        snapshot.forEach((doc) => {
+          messages.push({
+            id: doc.id,
+            ...doc.data(),
+          } as FirebaseChatMessage);
+        });
+        callback(messages);
+      },
+      (error) => {
+        console.error('Error listening to messages:', error);
+        callback([]);
+      }
+    );
+  },
+
   // === NOTES FUNCTIONS ===
   
   // Tambah catatan baru

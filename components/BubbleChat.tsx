@@ -17,7 +17,7 @@ export default function BubbleChat({
   const isSender = type === 'sender';
   
   return (
-    <View className={`mb-4 ${isSender ? 'items-end' : 'items-start'}`}>
+    <View className={`mb-2 ${isSender ? 'items-end' : 'items-start'}`}>
       <View
         className={`max-w-[80%] px-4 py-3 rounded-2xl ${
           isSender 

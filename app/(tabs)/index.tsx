@@ -1,10 +1,12 @@
 import BubbleChat, { BubbleChatProps } from '@/components/BubbleChat';
 import { icons } from '@/constants/icons';
+import { useReminder } from '@/hooks/useReminder';
 import { QuiblyDB } from '@/services/firebase'; // Import QuiblyDB
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { SectionList } from 'react-native';
+
 import {
   Dimensions,
-  FlatList,
   Image,
   Keyboard,
   KeyboardAvoidingView,
@@ -47,11 +49,11 @@ const cleanContent = (message: string, type: 'reminder' | 'todo' | 'note'): stri
   
   if (type === 'reminder') {
     // Hapus kata-kata instruksi reminder
-    cleaned = cleaned.replace(/^(ingatkan|reminder|ingat)\s+(saya|aku|ku)\s+/i, '');
-    cleaned = cleaned.replace(/^(ingatkan|reminder|ingat)\s+/i, '');
-    cleaned = cleaned.replace(/\s+(besok|hari ini|lusa|minggu depan)\s+/i, ' ');
-    cleaned = cleaned.replace(/\s+(jam|pukul)\s+\d{1,2}(:\d{2})?\s*(pagi|siang|sore|malam|am|pm)?\s+/i, ' ');
-    cleaned = cleaned.replace(/\s+untuk\s+/i, ' ');
+    cleaned = cleaned.replace(/^(ingatkan|reminder|ingat)\s+(saya|aku|ku)?\s*(untuk)?\s*/i, '');
+    cleaned = cleaned.replace(/\bdalam\s+\d+\s*(menit|jam)\b/gi, '');
+    cleaned = cleaned.replace(/\b(besok|hari ini|lusa|minggu depan)\b/gi, '');
+    cleaned = cleaned.replace(/\b(jam|pukul)\s+\d{1,2}(:\d{2})?\s*(pagi|siang|sore|malam|am|pm)?\b/gi, '');
+    cleaned = cleaned.replace(/\s+/g, ' ').trim();
     cleaned = cleaned.trim();
   } else if (type === 'todo') {
     // Hapus kata-kata instruksi todo
@@ -74,20 +76,34 @@ const cleanContent = (message: string, type: 'reminder' | 'todo' | 'note'): stri
 const parseTimeFromMessage = (message: string): Date | null => {
   const text = message.toLowerCase();
   const now = new Date();
-  
-  // Pattern untuk jam (contoh: jam 9, jam 09:30, jam 9 pagi, jam 8 malam)
+  let targetDate = new Date(now);
+
+  // ⏱ Tambahkan support untuk waktu relatif "dalam X menit/jam"
+  const relativeTimeMatch = text.match(/dalam\s+(\d+)\s*(menit|jam)/i);
+  if (relativeTimeMatch) {
+    const amount = parseInt(relativeTimeMatch[1]);
+    const unit = relativeTimeMatch[2];
+
+    if (unit.includes('menit')) {
+      targetDate.setMinutes(targetDate.getMinutes() + amount);
+    } else if (unit.includes('jam')) {
+      targetDate.setHours(targetDate.getHours() + amount);
+    }
+
+    return targetDate;
+  }
+
+  // ...lanjutan pattern jam seperti sebelumnya
   const timePatterns = [
     /(?:jam|pukul)\s*(\d{1,2})(?::(\d{2}))?\s*(pagi|siang|sore|malam)?/i,
     /(\d{1,2})(?::(\d{2}))?\s*(am|pm)/i,
     /(\d{1,2})\s*(pagi|siang|sore|malam)/i
   ];
 
-  let targetDate = new Date(now);
   let timeFound = false;
-  let hour = 9; // Default hour
+  let hour = 9;
   let minute = 0;
 
-  // Parse waktu
   for (let pattern of timePatterns) {
     const match = text.match(pattern);
     if (match) {
@@ -95,19 +111,16 @@ const parseTimeFromMessage = (message: string): Date | null => {
       minute = match[2] ? parseInt(match[2]) : 0;
       const period = match[3]?.toLowerCase();
 
-      // Konversi ke 24 jam
       if (period === 'malam' && hour < 12) hour += 12;
       if (period === 'sore' && hour < 17) hour += 12;
       if (period === 'pm' && hour < 12) hour += 12;
       if ((period === 'pagi' || period === 'am') && hour === 12) hour = 0;
-      if (period === 'siang' && hour < 12) hour = hour; // Siang tetap sama
 
       timeFound = true;
       break;
     }
   }
 
-  // Parse hari
   if (text.includes('besok')) {
     targetDate.setDate(targetDate.getDate() + 1);
   } else if (text.includes('lusa')) {
@@ -116,15 +129,17 @@ const parseTimeFromMessage = (message: string): Date | null => {
     targetDate.setDate(targetDate.getDate() + 7);
   }
 
-  // Set waktu
-  targetDate.setHours(hour, minute, 0, 0);
-  
-  // Jika waktu sudah lewat hari ini dan tidak ada indikator hari, set ke besok
-  if (!text.includes('besok') && !text.includes('lusa') && !text.includes('minggu') && targetDate <= now) {
-    targetDate.setDate(targetDate.getDate() + 1);
+  if (timeFound) {
+    targetDate.setHours(hour, minute, 0, 0);
+
+    if (!text.includes('besok') && !text.includes('lusa') && !text.includes('minggu') && targetDate <= now) {
+      targetDate.setDate(targetDate.getDate() + 1);
+    }
+
+    return targetDate;
   }
 
-  return targetDate;
+  return null;
 };
 
 // Fungsi parsing due date untuk todo
@@ -219,7 +234,7 @@ const parseMessage = (message: string): ParseResult => {
       return {
         type: 'todo',
         cleanContent: cleanedContent,
-        dueDate,
+        dueDate: dueDate,
         originalMessage: message
       };
     }
@@ -233,7 +248,7 @@ const parseMessage = (message: string): ParseResult => {
   };
 };
 
-// Generate response berdasarkan tipe
+// Generate response berdasarkan tipe - HANYA KONFIRMASI untuk reminder
 const generateResponse = (parseResult: ParseResult): string => {
   switch (parseResult.type) {
     case 'reminder':
@@ -266,230 +281,151 @@ const generateResponse = (parseResult: ParseResult): string => {
   }
 };
 
+function formatMessageDateLabel(date: Date): string {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+
+  const messageDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+
+  if (messageDate.getTime() === today.getTime()) {
+    return 'Today';
+  } else if (messageDate.getTime() === yesterday.getTime()) {
+    return 'Yesterday';
+  } else {
+    return date.toLocaleDateString('en-US', { day: '2-digit', month: 'short' });
+  }
+}
+
 export default function Index() {
   const insets = useSafeAreaInsets();
-  const flatListRef = useRef<FlatList>(null);
+  const sectionListRef = useRef<SectionList>(null);
   const [inputText, setInputText] = useState('');
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
+  const { checkReminders } = useReminder();
 
-  // Load message history from Firebase on component mount
   useEffect(() => {
-    const loadMessageHistory = async () => {
-      try {
-        setIsLoadingHistory(true);
-        
-        // Ambil semua messages dari Firebase
-        const messageHistory = await QuiblyDB.getMessages();
-        
-        if (messageHistory && messageHistory.length > 0) {
-          // Convert Firebase messages to ChatMessage format
-          const chatMessages: ChatMessage[] = messageHistory.map((msg: FirebaseMessage, index: number) => {
-            // Handle timestamp conversion
-            let timestampString = new Date().toLocaleTimeString('id-ID', { 
-              hour: 'numeric', 
-              minute: '2-digit',
-              hour12: false
-            });
-
-            if (msg.timestamp) {
-              try {
-                let date: Date;
-                
-                // Handle different timestamp formats
-                if (typeof msg.timestamp === 'string') {
-                  date = new Date(msg.timestamp);
-                } else if (msg.timestamp.toDate && typeof msg.timestamp.toDate === 'function') {
-                  // Firebase Timestamp object
-                  date = msg.timestamp.toDate();
-                } else if (msg.timestamp.seconds) {
-                  // Firebase Timestamp object with seconds
-                  date = new Date(msg.timestamp.seconds * 1000);
-                } else {
-                  date = new Date(msg.timestamp);
-                }
-
-                if (!isNaN(date.getTime())) {
-                  timestampString = date.toLocaleTimeString('id-ID', { 
-                    hour: 'numeric', 
-                    minute: '2-digit',
-                    hour12: false
-                  });
-                }
-              } catch (error) {
-                console.warn('Error parsing timestamp:', error);
-              }
+    const unsubscribe = QuiblyDB.listenToMessages((newMessages) => {
+      const chatMessages: ChatMessage[] = newMessages.map((msg: FirebaseMessage, index: number) => {
+        let date = new Date();
+        if (msg.timestamp) {
+          try {
+            if (typeof msg.timestamp === 'string') {
+              date = new Date(msg.timestamp);
+            } else if (msg.timestamp.toDate) {
+              date = msg.timestamp.toDate();
+            } else if (msg.timestamp.seconds) {
+              date = new Date(msg.timestamp.seconds * 1000);
             }
-
-            return {
-              id: msg.id || `msg-${index}-${Date.now()}`,
-              message: msg.text || msg.message || '',
-              type: (msg.type === 'sender' ? 'sender' : 'answer') as 'sender' | 'answer',
-              timestamp: timestampString,
-            };
-          });
-          
-          // Add welcome messages at the beginning (oldest messages)
-          const welcomeMessages: ChatMessage[] = [
-            {
-              id: 'welcome-1',
-              message: 'Welcome to Quibly, your personal memory assistant. Just type anything and I\'ll sort it for you 😊',
-              type: 'answer',
-              timestamp: '8:45 PM',
-            },
-            {
-              id: 'welcome-2',
-              message: 'Task go to To-Dos, notes stay as Notes, reminders will notify you ✅',
-              type: 'answer',
-              timestamp: '8:45 PM',
-            },
-          ];
-          
-          // Combine welcome messages with chat history
-          setMessages([...welcomeMessages, ...chatMessages]);
-        } else {
-          // Jika tidak ada history, hanya tampilkan welcome message
-          setMessages([
-            {
-              id: 'welcome-1',
-              message: 'Welcome to Quibly, your personal memory assistant. Just type anything and I\'ll sort it for you 😊',
-              type: 'answer',
-              timestamp: '8:45 PM',
-            },
-            {
-              id: 'welcome-2',
-              message: 'Task go to To-Dos, notes stay as Notes, reminders will notify you ✅',
-              type: 'answer',
-              timestamp: '8:45 PM',
-            },
-          ]);
+          } catch {
+            date = new Date();
+          }
         }
-      } catch (error) {
-        console.error('Error loading message history:', error);
-        // Fallback ke welcome message jika error
-        setMessages([
-          {
-            id: 'welcome-1',
-            message: 'Welcome to Quibly, your personal memory assistant. Just type anything and I\'ll sort it for you 😊',
-            type: 'answer',
-            timestamp: '8:45 PM',
-          },
-          {
-            id: 'welcome-2',
-            message: 'Task go to To-Dos, notes stay as Notes, reminders will notify you ✅',
-            type: 'answer',
-            timestamp: '8:45 PM',
-          },
-        ]);
-      } finally {
-        setIsLoadingHistory(false);
-      }
-    };
 
-    loadMessageHistory();
+        return {
+          id: msg.id || `msg-${index}-${Date.now()}`,
+          message: msg.text || msg.message || '',
+          type: msg.type === 'sender' ? 'sender' : 'answer',
+          timestamp: date.toLocaleTimeString('id-ID', {
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: false
+          }),
+          rawDate: date
+        };
+      });
+
+      setMessages(chatMessages);
+      setIsLoadingHistory(false);
+    });
+
+    return () => unsubscribe();
   }, []);
 
   useEffect(() => {
-    const keyboardDidShowListener = Keyboard.addListener(
-      'keyboardDidShow',
-      (e) => setKeyboardHeight(e.endCoordinates.height)
-    );
-    const keyboardDidHideListener = Keyboard.addListener(
-      'keyboardDidHide',
-      () => setKeyboardHeight(0)
-    );
-
+    const show = Keyboard.addListener('keyboardDidShow', (e) => setKeyboardHeight(e.endCoordinates.height));
+    const hide = Keyboard.addListener('keyboardDidHide', () => setKeyboardHeight(0));
     return () => {
-      keyboardDidHideListener.remove();
-      keyboardDidShowListener.remove();
+      show.remove();
+      hide.remove();
     };
   }, []);
 
-  // Fungsi untuk menangani pengiriman pesan
+  const groupedMessages = useMemo(() => {
+    const groups: { [label: string]: ChatMessage[] } = {};
+    messages.forEach((msg) => {
+      const label = formatMessageDateLabel(msg.rawDate);
+      if (!groups[label]) groups[label] = [];
+      groups[label].push(msg);
+    });
+
+    return Object.entries(groups)
+      .map(([title, data]) => ({
+        title,
+        data: data.reverse()
+      }))
+      .reverse();
+  }, [messages]);
+
   const handleSendMessage = async () => {
     if (inputText.trim() === '' || isLoading) return;
 
     const userMessage = inputText.trim();
     setIsLoading(true);
 
-    // Tambah pesan user ke chat
+    const now = new Date();
     const newUserMessage: ChatMessage = {
       id: Date.now().toString(),
       message: userMessage,
       type: 'sender',
-      timestamp: new Date().toLocaleTimeString('id-ID', { 
-        hour: 'numeric', 
-        minute: '2-digit',
-        hour12: false
-      }),
+      timestamp: now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false }),
+      rawDate: now
     };
 
-    setMessages(prev => [...prev, newUserMessage]);
+    setMessages((prev) => [...prev, newUserMessage]);
     setInputText('');
 
     try {
-      // Parse pesan
       const parseResult = parseMessage(userMessage);
-      
-      // Simpan ke Firebase berdasarkan kategori
       switch (parseResult.type) {
         case 'reminder':
           await QuiblyDB.addReminder(parseResult.cleanContent, parseResult.parsedTime!);
-          // Juga simpan ke messages untuk history
-          await QuiblyDB.addMessage(userMessage, 'sender');
           break;
         case 'todo':
           await QuiblyDB.addTodo(parseResult.cleanContent, parseResult.dueDate?.toISOString());
-          await QuiblyDB.addMessage(userMessage, 'sender');
           break;
         default:
           await QuiblyDB.addNote(parseResult.cleanContent);
-          await QuiblyDB.addMessage(userMessage, 'sender');
           break;
       }
 
-      // Generate dan tampilkan response sistem
+      await QuiblyDB.addMessage(userMessage, 'sender');
+
       const systemResponse = generateResponse(parseResult);
-      
-      // Simpan response sistem ke messages
       await QuiblyDB.addMessage(systemResponse, 'answer');
-      
-      const aiMessage: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        message: systemResponse,
-        type: 'answer',
-        timestamp: new Date().toLocaleTimeString('id-ID', { 
-          hour: 'numeric', 
-          minute: '2-digit',
-          hour12: false
-        }),
-      };
 
-      setMessages(prev => [...prev, aiMessage]);
-
-    } catch (error) {
-      console.error('Error saving message:', error);
-      
-      // Tampilkan pesan error
+    } catch (err) {
       const errorMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
         message: 'Maaf, terjadi kesalahan. Silakan coba lagi.',
         type: 'answer',
-        timestamp: new Date().toLocaleTimeString('id-ID', { 
-          hour: 'numeric', 
+        timestamp: new Date().toLocaleTimeString('id-ID', {
+          hour: '2-digit',
           minute: '2-digit',
           hour12: false
         }),
+        rawDate: new Date()
       };
-      setMessages(prev => [...prev, errorMessage]);
+      setMessages((prev) => [...prev, errorMessage]);
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Show loading indicator while loading history
   if (isLoadingHistory) {
     return (
       <View className="flex-1 bg-black items-center justify-center">
@@ -499,14 +435,14 @@ export default function Index() {
   }
 
   return (
-    <KeyboardAvoidingView 
+    <KeyboardAvoidingView
       className="flex-1 bg-black"
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 83 : 0}
     >
-      <FlatList
-        ref={flatListRef}
-        data={[...messages].reverse()}
+      <SectionList
+        ref={sectionListRef}
+        sections={groupedMessages}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
           <BubbleChat
@@ -516,43 +452,37 @@ export default function Index() {
             showTimestamp={true}
           />
         )}
-        ListFooterComponent={
-          <View className="items-center py-2">
-            <Text className="text-gray-400 text-sm">Today</Text>
+        renderSectionFooter={({ section: { title } }) => (
+          <View className="items-center pb-4">
+            <Text className="text-gray-400 text-sm">{title}</Text>
           </View>
-        }
+        )}
         className="flex-1 px-4"
         showsVerticalScrollIndicator={false}
-        inverted={true}
-        onContentSizeChange={() => {
-          flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
-        }}
+        inverted
       />
 
-      {/* Input Area */}
-      <View 
+      <View
         className="flex-row items-center px-4 py-2 bg-black"
-        style={{ 
+        style={{
           paddingBottom: Platform.OS === 'ios' ? insets.bottom + 12 : 12,
           marginBottom: Platform.OS === 'android' ? keyboardHeight : 0
         }}
       >
-        {/* Add Button */}
         <TouchableOpacity className="mr-3">
           <View className="w-10 h-10 bg-kindaBlack rounded-full items-center justify-center">
             <Text className="text-white text-lg font-light">+</Text>
           </View>
         </TouchableOpacity>
 
-        {/* Text Input */}
-        <View className="flex-1 flex-row items-center bg-gray-800 rounded-3xl px-4 py-1 pb-3">
+        <View className="flex-1 flex-row items-center bg-kindaBlack rounded-3xl px-4 py-1 pb-3">
           <TextInput
             value={inputText}
             onChangeText={setInputText}
             placeholder="Type a message..."
             placeholderTextColor="#969696"
             className="flex-1 text-white text-base"
-            multiline={true}
+            multiline
             maxLength={500}
             onSubmitEditing={handleSendMessage}
             returnKeyType="send"
@@ -561,8 +491,7 @@ export default function Index() {
           />
         </View>
 
-        {/* Send Button */}
-        <TouchableOpacity 
+        <TouchableOpacity
           onPress={handleSendMessage}
           className="ml-3"
           disabled={inputText.trim() === '' || isLoading}
@@ -576,7 +505,7 @@ export default function Index() {
               ) : (
                 <Image
                   source={icons.sendText}
-                  className='w-5 h-5'
+                  className="w-5 h-5"
                   tintColor="#ffffff"
                   resizeMode="contain"
                 />
