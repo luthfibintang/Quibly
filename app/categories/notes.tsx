@@ -125,7 +125,7 @@ export default function Notes() {
     <View className="flex-1 bg-black">
       {/* Header */}
       <View
-        className="flex-row items-center justify-between px-6 py-4 border-b border-gray-800"
+        className="flex-row items-center justify-between px-6 py-4"
         style={{ paddingTop: insets.top + 16 }}
       >
         <TouchableOpacity onPress={() => router.back()}>

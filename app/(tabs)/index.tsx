@@ -50,7 +50,8 @@ const cleanContent = (message: string, type: 'reminder' | 'todo' | 'note'): stri
   if (type === 'reminder') {
     // Hapus kata-kata instruksi reminder
     cleaned = cleaned.replace(/^(ingatkan|reminder|ingat)\s+(saya|aku|ku)?\s*(untuk)?\s*/i, '');
-    cleaned = cleaned.replace(/\bdalam\s+\d+\s*(menit|jam)\b/gi, '');
+    cleaned = cleaned.replace(/\bdalam\s+\d+\s*(menit|jam)\s*(ingatkan\s+saya\s+untuk)?/gi, '');
+    cleaned = cleaned.replace(/ingatkan\s+(saya|aku|ku)?\s*(untuk)?/i, '');
     cleaned = cleaned.replace(/\b(besok|hari ini|lusa|minggu depan)\b/gi, '');
     cleaned = cleaned.replace(/\b(jam|pukul)\s+\d{1,2}(:\d{2})?\s*(pagi|siang|sore|malam|am|pm)?\b/gi, '');
     cleaned = cleaned.replace(/\s+/g, ' ').trim();

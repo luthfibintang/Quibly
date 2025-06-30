@@ -19,5 +19,13 @@ export default function RootLayout() {
       name="categories/todolist"
       options={{headerShown: false}}
     />
+    <Stack.Screen
+      name="routines/createRoutines"
+      options={{headerShown: false}}
+    />
+    <Stack.Screen
+      name="routines/[id]"
+      options={{headerShown: false}}
+    />
   </Stack>;
 }

@@ -4,6 +4,7 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDoc,
   getDocs,
   getFirestore,
   onSnapshot,
@@ -322,5 +323,126 @@ export const QuiblyDB = {
       });
       callback(reminders);
     });
-  }
+  },
+
+
+// === ROUTINES FUNCTIONS ===
+  addRoutine: async (routineData: {
+    message: string;
+    startDate: Date;
+    endDate: Date | null;
+    selectedDays: string[];
+  }): Promise<string> => {
+    try {
+      const docRef = await addDoc(collection(db, 'routines'), {
+        ...routineData,
+        isEnabled: true, // Default status saat dibuat
+        created_at: serverTimestamp()
+      });
+      return docRef.id;
+    } catch (error) {
+      console.error("Error adding routine: ", error);
+      throw error;
+    }
+  },
+
+  // Listen untuk perubahan routines
+  listenToRoutines: (callback: (routines: FirebaseRoutine[]) => void) => {
+    const q = query(collection(db, 'routines'), orderBy('created_at', 'desc'));
+    return onSnapshot(q, (querySnapshot) => {
+      const routines: FirebaseRoutine[] = [];
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+
+        // --- KUNCI PERBAIKAN ADA DI SINI ---
+        // Hanya proses dokumen jika timestamp penting (startDate dan created_at) ada.
+        if (data.startDate && data.created_at) {
+          routines.push({
+            id: doc.id,
+            // Kita tidak memakai ...data lagi untuk kejelasan
+            message: data.message,
+            selectedDays: data.selectedDays,
+            isEnabled: data.isEnabled,
+            
+            // Konversi yang aman
+            startDate: data.startDate.toDate(),
+            endDate: data.endDate ? data.endDate.toDate() : null, // Cek jika endDate ada
+            created_at: data.created_at.toDate(),
+
+          } as FirebaseRoutine);
+        } else {
+            console.warn(`Skipping malformed routine document: ${doc.id}`);
+        }
+      });
+      callback(routines);
+    },
+    (error) => {
+      console.error("Error listening to routines: ", error);
+      callback([]);
+    });
+  },
+
+  // Update status enabled/disabled rutin
+  updateRoutineStatus: async (routineId: string, isEnabled: boolean): Promise<void> => {
+    try {
+      const routineRef = doc(db, 'routines', routineId);
+      await updateDoc(routineRef, { isEnabled });
+    } catch (error) {
+      console.error("Error updating routine status: ", error);
+      throw error;
+    }
+  },
+
+  getRoutineById: async (routineId: string): Promise<FirebaseRoutine | null> => {
+    try {
+      const docRef = doc(db, 'routines', routineId);
+      const docSnap = await getDoc(docRef);
+
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        // Konversi Timestamps ke Dates
+        return {
+          id: docSnap.id,
+          ...data,
+          startDate: data.startDate.toDate(),
+          endDate: data.endDate ? data.endDate.toDate() : null,
+          created_at: data.created_at.toDate(),
+        } as FirebaseRoutine;
+      } else {
+        console.log("No such routine document!");
+        return null;
+      }
+    } catch (error) {
+      console.error("Error getting routine by ID: ", error);
+      throw error;
+    }
+  },
+
+  // Update sebuah routine yang sudah ada
+  updateRoutine: async (routineId: string, updatedData: {
+    message: string;
+    startDate: Date;
+    endDate: Date | null;
+    selectedDays: string[];
+  }): Promise<void> => {
+    try {
+      const routineRef = doc(db, 'routines', routineId);
+      // SDK Firebase secara otomatis mengkonversi Date ke Timestamp
+      await updateDoc(routineRef, updatedData);
+    } catch (error) {
+      console.error("Error updating routine: ", error);
+      throw error;
+    }
+  },
+
+  // Hapus sebuah routine
+  deleteRoutine: async (routineId: string): Promise<void> => {
+    try {
+      const routineRef = doc(db, 'routines', routineId);
+      await deleteDoc(routineRef);
+    } catch (error) {
+      console.error("Error deleting routine: ", error);
+      throw error;
+    }
+  },
 };

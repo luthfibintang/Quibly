@@ -24,6 +24,15 @@ interface ChatMessageData {
   timestamp: Timestamp;
 }
 
+interface RoutineData {
+  message: string;
+  startDate: Timestamp; // Di Firestore, kita simpan sebagai Timestamp
+  endDate: Timestamp | null; // Bisa Timestamp atau null
+  selectedDays: string[];
+  isEnabled: boolean;
+  created_at: Timestamp;
+}
+
 // Firebase document interfaces (dengan ID)
 interface FirebaseNote extends NoteData {
   id: string;
@@ -39,4 +48,8 @@ interface FirebaseTodo extends TodoData {
 
 interface FirebaseChatMessage extends ChatMessageData {
  id: string;
+}
+
+interface FirebaseRoutine extends RoutineData {
+  id: string;
 }
