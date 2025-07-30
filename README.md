@@ -229,7 +229,7 @@ components/                    # Reusable UI components
 
 ## 🤝 Contributing
 
-We love contributions from the community! Here's how you can help make Quibly even better:
+I love contributions from the community! Here's how you can help make Quibly even better:
 
 1. **Fork the repository**
 2. **Create your feature branch** (`git checkout -b feature/AmazingFeature`)
