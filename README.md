@@ -227,28 +227,6 @@ components/                    # Reusable UI components
 
 ---
 
-<!-- ## 🚀 Deployment
-
-### Development Build
-```bash
-# iOS
-npx expo run:ios
-
-# Android
-npx expo run:android
-```
-
-### Production Build
-```bash
-# Build for app stores
-eas build --platform all
-
-# Submit to stores
-eas submit --platform all -->
-```
-
----
-
 ## 🤝 Contributing
 
 We love contributions from the community! Here's how you can help make Quibly even better:
